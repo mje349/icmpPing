@@ -14,6 +14,7 @@ import binascii
 ICMP_ECHO_REQUEST = 8
 
 
+'''
 def checksum(string):
     csum = 0
     countTo = (len(string) // 2) * 2
@@ -35,7 +36,28 @@ def checksum(string):
     answer = answer & 0xffff
     answer = answer >> 8 | (answer << 8 & 0xff00)
     return answer
+'''
+def checksum(str_):
+    # In this function we make the checksum of our packet
+    str_ = bytearray(str_)
+    csum = 0
+    countTo = (len(str_) // 2) * 2
 
+    for count in range(0, countTo, 2):
+        thisVal = str_[count+1] * 256 + str_[count]
+        csum = csum + thisVal
+        csum = csum & 0xffffffff
+
+    if countTo < len(str_):
+        csum = csum + str_[-1]
+        csum = csum & 0xffffffff
+
+    csum = (csum >> 16) + (csum & 0xffff)
+    csum = csum + (csum >> 16)
+    answer = ~csum
+    answer = answer & 0xffff
+    answer = answer >> 8 | (answer << 8 & 0xff00)
+    return answer
 
 
 def receiveOnePing(mySocket, ID, timeout, destAddr):
@@ -53,7 +75,23 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 
         # Fill in start
 
+        #First, note that the ICMP header starts after bit 160.
+        #We want to know at which byte index to start at -
+        #there are 8 bits in 1 byte so we start at index 20
+        #The type = 1 byte, code = 1 byte, checksum = 2 bytes,
+        #ID = 2 bytes, and sequence = 2 bytes which gives us
+        #8 bytes total. So we want indices 20 - 28
+
         # Fetch the ICMP header from the IP packet
+        icmp_header = recPacket[20:28]
+
+        #We know to unpack in this order - look at how the ICMP header is packed in the sendOnePing method
+        icmp_type, icmp_code, icmp_checksum, icmp_id, icmp_seq = struct.unpack("bbHHh", icmp_header)
+
+        if type != 8 and icmp_id == ID:
+            bytesInDouble = struct.calcsize("d")
+            timeSent = struct.unpack("d", recPacket[28:28 + bytesInDouble])[0]
+            return timeReceived - timeSent
 
         # Fill in end
         timeLeft = timeLeft - howLongInSelect
